@@ -80,7 +80,8 @@ ORDER BY REVENUE DESC
  GROUP BY  CUSTOMERNAME
  ORDER BY  MONETARYVALUE DESC
 
- --RESULT #FRM
+ --RESULT #FRM/ Phần chính
+ 
  WITH rfm AS (
 SELECT 
 	CUSTOMERNAME,
@@ -91,7 +92,7 @@ SELECT
 	DATEDIFF(dd, max(ORDERDATE), (SELECT max(ORDERDATE) FROM sales_data_sample)) AS Recency
 FROM sales_data_sample
 GROUP BY CUSTOMERNAME
-) ,
+) , -- các chỉ số RFM quen thuộc/ datediff, count, sum
 
 rfm_calc AS
 (
@@ -101,13 +102,15 @@ SELECT
 	NTILE(4) OVER (ORDER BY Recency DESC) AS rfm_recency,
 	NTILE(4) OVER (ORDER BY Frequency) AS rfm_frequency,
 	NTILE(4) OVER (ORDER BY MonetaryValue) AS rfm_monetary
+	-- sử dụng windowfuntion chia ra theo 4 nhóm khách hàng khác nhau
 FROM rfm AS r
 )
 
 SELECT c.*, 
 	   rfm_recency + rfm_frequency + rfm_monetary AS rfm_cell,
 	   CAST(rfm_recency AS varchar) + CAST(rfm_frequency AS varchar)+CAST(rfm_monetary AS varchar) AS rfm_cell_string
---pass CTEs into temp table
+	   -- cộng chuỗi các rfm để được thêm 1 khía cạnh tổng hợp
+--pass CTEs into temp table/ bảng tạm
 INTO ##rfm 
 FROM rfm_calc AS c
  
@@ -121,6 +124,7 @@ FROM rfm_calc AS c
 		rfm_frequency,
 		rfm_monetary,
 		rfm_cell_string,
+		--các trường hợp phân chia 
 		CASE 
 	WHEN rfm_cell_string IN (111,112,121,122,123,132,211,212,114,141) THEN 'lost_customers' --lost customers
 	WHEN rfm_cell_string IN (133,134,143,244,334,343,344,144) THEN 'slipping away, cannot lose' --(big spenders that havent purchased lately)
@@ -128,10 +132,11 @@ FROM rfm_calc AS c
 	WHEN rfm_cell_string IN (222,223,233,322) THEN 'potential_customers'
 	WHEN rfm_cell_string IN (323,333,321,422,332,432) THEN 'active'--customers that buy often at lower price points
 	WHEN rfm_cell_string IN (433,434,443,444) THEN 'loyal'
+	
 	END rfm_segment
  FROM ##rfm
 
--- BASKET ANALYSIS / Products Sold Together
+-- BASKET ANALYSIS / Products Sold Together/ Phân tích rổ
 -- Gives the Number of products per order.
 SELECT
 	[ORDERNUMBER],
@@ -139,15 +144,17 @@ SELECT
 FROM sales_data_sample
 WHERE status ='Shipped'
 GROUP BY ORDERNUMBER;
+-- đầu tiên đếm số đơn hàng theo từng ordernumeber
 
 --Filter for ordernumber 10411 to verify there are 9 products in it
-
+--check
 SELECT
 	*
 FROM sales_data_sample
 WHERE ORDERNUMBER = 10411;
 
 --Build a subquery that gives us the order numbers when two products are ordered together(rn=2)
+
 SELECT ORDERNUMBER
 FROM (
 SELECT
